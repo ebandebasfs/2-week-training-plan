@@ -4,4 +4,7 @@ export const envConfig = () => ({
     ports: {
         server: env.PORT
     },
+    db: {
+        url: env.DATABASE_URL
+    },
 })

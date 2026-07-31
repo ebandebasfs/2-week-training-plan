@@ -1,0 +1,29 @@
+import { Check, Column, Entity, Index, JoinColumn, ManyToOne, OneToOne } from "typeorm";
+import { BaseEntitySchema } from "./base.entity";
+import { Customer } from "./customer.entity";
+import { Slot } from "./slot.entity";
+
+export enum BookingStatus {
+    PENDING = 'pending',
+    CONFIRMED = 'confirmed',
+    CANCELLED = 'cancelled'
+}
+
+@Entity('bookings')
+// @Check("status" IN)
+export class Booking extends BaseEntitySchema {
+    @Index()
+    @ManyToOne(() => Customer, (customer) => customer.bookings, {nullable: false})
+    @JoinColumn({ name: 'customer_id' })
+    customer!: Customer;
+
+    @OneToOne(() => Slot, (slot) => slot.booking, { nullable: false })
+    @JoinColumn({ name: 'slot_id' })
+    slot!: Slot;
+
+    @Column({type: 'nvarchar', length: 20, default: BookingStatus.PENDING})
+    status!: BookingStatus;
+
+    @Column({ type: 'nvarchar', nullable: true })
+    notes!: string | null;
+}

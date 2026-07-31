@@ -7,6 +7,7 @@ const envSchema = z.object({
         .transform((val) => Number(val))
         .pipe(z.number().int().positive())
         .default(3000),
+    DATABASE_URL: z.string().min(1),
 })
 
 // Run validation and get the validated object
