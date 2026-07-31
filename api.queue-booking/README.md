@@ -25,6 +25,52 @@
 
 [Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
 
+## Schema
+
+```mermaid
+erDiagram
+    CUSTOMERS ||--o{ BOOKINGS : places
+    SLOTS ||--o| BOOKINGS : "reserved by"
+
+    CUSTOMERS {
+        uuid id PK
+        string firstName
+        string lastName
+        string email UK
+        string username "nullable"
+        string password
+        datetime createdAt
+        datetime updatedAt
+    }
+
+    SLOTS {
+        uuid id PK
+        int capacity
+        datetime appointmentDate
+        time startTime
+        time endTime
+        boolean isAvailable "default true"
+        datetime createdAt
+        datetime updatedAt
+    }
+
+    BOOKINGS {
+        uuid id PK
+        uuid customer_id FK
+        uuid slot_id FK "unique"
+        string status "pending | confirmed | cancelled"
+        string notes "nullable"
+        datetime createdAt
+        datetime updatedAt
+    }
+```
+
+- **Customer → Booking**: one-to-many. `bookings.customer_id` is required and indexed (not unique) — a customer can hold many bookings.
+- **Slot → Booking**: one-to-one. `bookings.slot_id` is required and **unique** — a slot can be claimed by at most one booking, which is what makes the slot double-booking-safe at the schema level.
+- `status` is a `pending | confirmed | cancelled` value on `Booking`, defaulting to `pending`. Currently enforced only at the TypeScript level — no DB-level CHECK constraint yet (the `@Check` decorator on `Booking` is still commented out).
+
+Source: `src/db/entities/*.entity.ts` (TypeORM entity classes) and `src/db/migrations/1785491153757-InitSchema.ts`.
+
 ## Project setup
 
 ```bash
