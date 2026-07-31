@@ -9,7 +9,7 @@ Source: `ethanpatrickbandebas-training-plan.html` — Mon · W1 · Day 1
 - [ ] Skill IQ baseline — Next.js 14
 - [ ] Skill IQ baseline — SQL Essentials
 - [ ] EM-led baseline: 2-min intro video (one-sentence-first)
-- [ ] `queue-booking` repo scaffolded (NestJS + TypeORM, Next.js, SQL Server Dev Edition) — PR-only, branch protection on
+- [ ] `api.queue-booking` repo scaffolded (NestJS + TypeORM, Next.js, SQL Server Dev Edition) — PR-only, branch protection on
 - [ ] Seed data: customers / slots / bookings
 - [ ] Schema diagram in README
 
@@ -17,12 +17,12 @@ Note: Skill IQ baselines must be taken **before opening any course material**. R
 
 ## Schema diagram
 
-Added to `queue-booking/README.md` (Schema section) as a Mermaid ER diagram, generated from the actual entities:
+Added to `api.queue-booking/README.md` (Schema section) as a Mermaid ER diagram, generated from the actual entities:
 
 ```mermaid
 erDiagram
     CUSTOMERS ||--o{ BOOKINGS : places
-    APPOINTMENT_SLOTS ||--o| BOOKINGS : "reserved by"
+    SLOTS ||--o| BOOKINGS : "reserved by"
 
     CUSTOMERS {
         uuid id PK
@@ -35,7 +35,7 @@ erDiagram
         datetime updatedAt
     }
 
-    APPOINTMENT_SLOTS {
+    SLOTS {
         uuid id PK
         int capacity
         datetime appointmentDate
@@ -58,7 +58,9 @@ erDiagram
 ```
 
 - Customer → Booking: one-to-many (`customer_id` required, not unique)
-- AppointmentSlot → Booking: one-to-one (`slot_id` required and unique — this is the double-booking safety net at the schema level)
+- Slot → Booking: one-to-one (`slot_id` required and unique — this is the double-booking safety net at the schema level)
+
+Source: `api.queue-booking/src/db/entities/*.entity.ts` + `1785491153757-InitSchema.ts`.
 
 ## EOD email
 
