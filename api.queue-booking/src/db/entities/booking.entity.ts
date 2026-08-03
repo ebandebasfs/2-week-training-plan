@@ -10,7 +10,7 @@ export enum BookingStatus {
 }
 
 @Entity('bookings')
-// @Check("status" IN)
+@Check(`[status] IN ('pending', 'confirmed', 'cancelled')`)
 export class Booking extends BaseEntitySchema {
     @Index()
     @ManyToOne(() => Customer, (customer) => customer.bookings, {nullable: false})
