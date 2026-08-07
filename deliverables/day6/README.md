@@ -12,7 +12,7 @@ Source: `ethanpatrickbandebas-training-plan.html` — Mon · W2 · Day 6
 
 ## Deliverable (per the plan's Deliverable box — sent to EM in the EOD email)
 
-- [x] PR #6 — https://github.com/ebandebasfs/2-week-training-plan/pull/6 (opened with the exercise file; remaining commits — migrations, backfill, bench scripts, this deliverables folder — to follow)
+- [x] PR #6 — https://github.com/ebandebasfs/2-week-training-plan/pull/6 (3 commits: exercise query, migrations/backfill/bench scripts, deliverables docs — all pushed)
 - [x] Video rep — https://www.loom.com/share/3c91bf6d2ab74e07b9bff271c4face0c
 
 ## Migration runbook
