@@ -22,7 +22,10 @@
     "migration:generate": "npm run typeorm -- migration:generate -d src/db/data-source.ts",
     "migration:run": "npm run typeorm -- migration:run -d src/db/data-source.ts",
     "migration:revert": "npm run typeorm -- migration:revert -d src/db/data-source.ts",
-    "seed": "ts-node src/db/seed.ts"
+    "seed": "ts-node src/db/seed.ts",
+    "backfill:booking-status": "ts-node src/db/backfill-booking-status.ts",
+    "bench:index-seed": "ts-node src/db/bench-index-seed.ts",
+    "bench:index-teardown": "ts-node src/db/bench-index-teardown.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",

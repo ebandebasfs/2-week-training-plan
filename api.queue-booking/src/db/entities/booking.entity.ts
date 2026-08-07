@@ -26,4 +26,8 @@ export class Booking extends BaseEntitySchema {
 
     @Column({ type: 'nvarchar', nullable: true })
     notes!: string | null;
+
+    // Added for Week 2 Day 1 — drill column, distinct from `status` above (see runbook note)
+    @Column({ name: 'booking_status', type: 'nvarchar', length: 50, nullable: false })
+    bookingStatus!: string
 }
