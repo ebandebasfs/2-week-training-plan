@@ -21,22 +21,28 @@ Script: `api.queue-booking/src/db/backfill-booking-status.ts` (`npm run backfill
 const BATCH_SIZE = 100;
 
 while (true) {
-    const rows = await AppDataSource.query(
-        `SELECT TOP (@0) id FROM bookings WHERE booking_status IS NULL`,
-        [BATCH_SIZE],
-    );
-    if (rows.length === 0) break;
+    const batchCount = await AppDataSource.transaction(async (manager) => {
+        // UPDLOCK + READPAST: locks the selected rows and skips any already locked by a
+        // concurrent run, so two backfills executing at once can't grab the same batch.
+        const rows = await manager.query(
+            `SELECT TOP (@0) id FROM bookings WITH (UPDLOCK, READPAST) WHERE booking_status IS NULL`,
+            [BATCH_SIZE],
+        );
+        if (rows.length === 0) return 0;
 
-    const ids = rows.map((r) => r.id);
-    await AppDataSource.query(
-        `UPDATE bookings SET booking_status = 'confirmed' WHERE id IN (${ids.map((_, i) => `@${i}`).join(', ')})`,
-        ids,
-    );
+        const ids = rows.map((r) => r.id);
+        await manager.query(
+            `UPDATE bookings SET booking_status = 'confirmed' WHERE id IN (${ids.map((_, i) => `@${i}`).join(', ')})`,
+            ids,
+        );
+        return rows.length;
+    });
+    if (batchCount === 0) break;
     // 100ms delay between batches
 }
 ```
 
-Backfill value: `'confirmed'` — existing bookings predate this column, so there's no real payment/confirmation history to derive from; `'confirmed'` was chosen as the safe assumed default rather than leaving ambiguity. Written batched (`TOP (@0)` / 100 rows at a time) on purpose, even though the seeded table only has 8 rows — the batching is what prevents a full-table lock at real scale, so it's part of the exercise, not overkill for this dataset.
+Backfill value: `'confirmed'` — existing bookings predate this column, so there's no real payment/confirmation history to derive from; `'confirmed'` was chosen as the safe assumed default rather than leaving ambiguity. Written batched (`TOP (@0)` / 100 rows at a time) on purpose, even though the seeded table only has 8 rows — the batching is what prevents a full-table lock at real scale, so it's part of the exercise, not overkill for this dataset. Each batch's SELECT+UPDATE is wrapped in a transaction with `UPDLOCK, READPAST` so concurrent backfill runs can't double-process the same rows.
 
 **Expected Runtime:** at 8 rows, one batch, effectively instant. At scale, runtime is `(row_count / BATCH_SIZE) × (batch_update_time + 100ms delay)`.
 **Result:** `SELECT COUNT(*) FROM bookings WHERE booking_status IS NULL;` → 0 after running.
@@ -61,15 +67,21 @@ Note: SQL Server uses `ALTER COLUMN`, not the `MODIFY COLUMN` syntax in the prim
 
 ## Index Creation
 
-Index already existed on `customer_id` (`IDX_8e21b7ae33e7b0673270de4146`, from Day 1's `InitSchema`, driven by `@Index()` on `Booking.customer`). Drop/recreate handled by `DropCustomerIdIndex1786097092932.ts`:
+Index already existed on `customer_id` (from Day 1's `InitSchema`, driven by `@Index()` on `Booking.customer`) — originally under TypeORM's auto-generated name `IDX_8e21b7ae33e7b0673270de4146`, renamed to the stable `idx_bookings_customer_id` via `RenameCustomerIdIndex1786097300000.ts` so bench scripts and drill SQL don't depend on a hash that regenerates if the relationship definition changes:
 
 ```sql
 -- up()
-DROP INDEX "IDX_8e21b7ae33e7b0673270de4146" ON "bookings"
+EXEC sp_rename 'bookings.IDX_8e21b7ae33e7b0673270de4146', 'idx_bookings_customer_id', 'INDEX'
 
 -- down()
-CREATE INDEX "IDX_8e21b7ae33e7b0673270de4146" ON "bookings" ("customer_id")
+EXEC sp_rename 'bookings.idx_bookings_customer_id', 'IDX_8e21b7ae33e7b0673270de4146', 'INDEX'
 ```
+
+The drop/recreate needed for the timing drill itself is benchmark scaffolding, not a schema change, so it does **not** live in a migration (an earlier version of this drill did, via a now-removed `DropCustomerIdIndex` migration — but that meant anyone running `migration:run` on a fresh DB would drop the real index by default). Instead:
+
+- `bench-index-seed.ts` drops `idx_bookings_customer_id` right after seeding, so STEP A of `exercises/day6-index-timing.sql` measures a real full scan.
+- STEP B recreates it (`CREATE INDEX`, inline in the SQL file) before measuring "with index".
+- `bench-index-teardown.ts` checks whether the index exists and recreates it if not, as a safety net in case STEP B was skipped — the real table always ends the drill with its index intact.
 
 ### Attempt 1 — real seeded data (8 rows)
 

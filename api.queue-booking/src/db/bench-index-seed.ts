@@ -19,58 +19,69 @@ const BATCH_SIZE = 1000;
 async function seedBench() {
     await AppDataSource.initialize();
 
-    // 1) Dummy customers, tagged by email domain
-    const customerIds: string[] = [];
-    for (let inserted = 0; inserted < BENCH_CUSTOMER_COUNT; inserted += BATCH_SIZE) {
-        const batch = Math.min(BATCH_SIZE, BENCH_CUSTOMER_COUNT - inserted);
-        const rows: string[] = [];
+    try {
+        // 1) Dummy customers, tagged by email domain
+        const customerIds: string[] = [];
+        for (let inserted = 0; inserted < BENCH_CUSTOMER_COUNT; inserted += BATCH_SIZE) {
+            const batch = Math.min(BATCH_SIZE, BENCH_CUSTOMER_COUNT - inserted);
+            const rows: string[] = [];
 
-        for (let i = 0; i < batch; i++) {
-            const id = randomUUID();
-            customerIds.push(id);
-            const n = inserted + i;
-            rows.push(
-                `('${id}', 'Bench', 'Customer', 'bench+${n}@${BENCH_EMAIL_DOMAIN}', 'bench-password')`,
+            for (let i = 0; i < batch; i++) {
+                const id = randomUUID();
+                customerIds.push(id);
+                const n = inserted + i;
+                rows.push(
+                    `('${id}', 'Bench', 'Customer', 'bench+${n}@${BENCH_EMAIL_DOMAIN}', 'bench-password')`,
+                );
+            }
+
+            await AppDataSource.query(
+                `INSERT INTO customers (id, first_name, last_name, email, password) VALUES ${rows.join(', ')}`,
             );
+            console.log(`Seeded ${inserted + batch} / ${BENCH_CUSTOMER_COUNT} bench customers...`);
         }
 
-        await AppDataSource.query(
-            `INSERT INTO customers (id, first_name, last_name, email, password) VALUES ${rows.join(', ')}`,
-        );
-        console.log(`Seeded ${inserted + batch} / ${BENCH_CUSTOMER_COUNT} bench customers...`);
+        // 2) Slots + bookings, round-robin across the dummy customers
+        for (let inserted = 0; inserted < BENCH_ROW_COUNT; inserted += BATCH_SIZE) {
+            const batch = Math.min(BATCH_SIZE, BENCH_ROW_COUNT - inserted);
+            const slotIds = Array.from({ length: batch }, () => randomUUID());
+
+            const slotRows = slotIds
+                .map((id) => `('${id}', 1, '${BENCH_MARKER_DATE}', '09:00:00', '09:30:00', 1)`)
+                .join(', ');
+            await AppDataSource.query(
+                `INSERT INTO slots (id, capacity, appointment_date, start_time, end_time, is_available) VALUES ${slotRows}`,
+            );
+
+            const bookingRows = slotIds
+                .map((slotId, i) => {
+                    const customerId = customerIds[(inserted + i) % customerIds.length];
+                    return `('${customerId}', '${slotId}', 'confirmed')`;
+                })
+                .join(', ');
+            await AppDataSource.query(
+                `INSERT INTO bookings (customer_id, slot_id, booking_status) VALUES ${bookingRows}`,
+            );
+
+            console.log(`Seeded ${inserted + batch} / ${BENCH_ROW_COUNT} bench bookings...`);
+        }
+
+        // Drop the customer_id index so STEP A of the timing drill measures a real full
+        // table scan. This is benchmark scaffolding, not a schema change, so it lives here
+        // rather than in a migration — bench-index-teardown.ts guarantees it's recreated
+        // before the run is done, even if STEP B (the "with index" measurement) is skipped.
+        await AppDataSource.query(`DROP INDEX "idx_bookings_customer_id" ON "bookings"`);
+
+        console.log(`Bench seed complete. Use this customer_id for the benchmark query: ${customerIds[0]}`);
+        console.log(`(It has ~${Math.round(BENCH_ROW_COUNT / BENCH_CUSTOMER_COUNT)} bookings out of ${BENCH_ROW_COUNT} total — a selective filter.)`);
+        console.log(`customer_id index dropped for STEP A. Run STEP B's "CREATE INDEX" (see day6-index-timing.sql) before measuring with the index.`);
+    } finally {
+        await AppDataSource.destroy();
     }
-
-    // 2) Slots + bookings, round-robin across the dummy customers
-    for (let inserted = 0; inserted < BENCH_ROW_COUNT; inserted += BATCH_SIZE) {
-        const batch = Math.min(BATCH_SIZE, BENCH_ROW_COUNT - inserted);
-        const slotIds = Array.from({ length: batch }, () => randomUUID());
-
-        const slotRows = slotIds
-            .map((id) => `('${id}', 1, '${BENCH_MARKER_DATE}', '09:00:00', '09:30:00', 1)`)
-            .join(', ');
-        await AppDataSource.query(
-            `INSERT INTO slots (id, capacity, appointment_date, start_time, end_time, is_available) VALUES ${slotRows}`,
-        );
-
-        const bookingRows = slotIds
-            .map((slotId, i) => {
-                const customerId = customerIds[(inserted + i) % customerIds.length];
-                return `('${customerId}', '${slotId}', 'confirmed')`;
-            })
-            .join(', ');
-        await AppDataSource.query(
-            `INSERT INTO bookings (customer_id, slot_id, booking_status) VALUES ${bookingRows}`,
-        );
-
-        console.log(`Seeded ${inserted + batch} / ${BENCH_ROW_COUNT} bench bookings...`);
-    }
-
-    console.log(`Bench seed complete. Use this customer_id for the benchmark query: ${customerIds[0]}`);
-    console.log(`(It has ~${Math.round(BENCH_ROW_COUNT / BENCH_CUSTOMER_COUNT)} bookings out of ${BENCH_ROW_COUNT} total — a selective filter.)`);
-    await AppDataSource.destroy();
 }
 
 seedBench().catch((err) => {
     console.error(err);
     process.exit(1);
 });
+

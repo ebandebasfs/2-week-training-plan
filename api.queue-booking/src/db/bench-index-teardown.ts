@@ -9,18 +9,41 @@ const BENCH_EMAIL_DOMAIN = 'bench.local';
 async function teardownBench() {
     await AppDataSource.initialize();
 
-    await AppDataSource.query(
-        `DELETE FROM bookings WHERE slot_id IN (SELECT id FROM slots WHERE appointment_date = '${BENCH_MARKER_DATE}')`,
-    );
-    await AppDataSource.query(`DELETE FROM slots WHERE appointment_date = '${BENCH_MARKER_DATE}'`);
-    await AppDataSource.query(`DELETE FROM customers WHERE email LIKE '%@${BENCH_EMAIL_DOMAIN}'`);
+    try {
+        // Safety net: bench-index-seed.ts drops the index for STEP A. If STEP B (the
+        // "with index" measurement, which recreates it) was skipped, guarantee the index
+        // is back before we're done rather than leaving the real table unindexed.
+        const [{ indexExists }] = await AppDataSource.query(
+            `SELECT CASE WHEN EXISTS (
+                SELECT 1 FROM sys.indexes WHERE name = 'idx_bookings_customer_id' AND object_id = OBJECT_ID('bookings')
+            ) THEN 1 ELSE 0 END AS indexExists`,
+        );
+        if (!indexExists) {
+            await AppDataSource.query(`CREATE INDEX "idx_bookings_customer_id" ON "bookings" ("customer_id")`);
+            console.log('Recreated customer_id index (was left dropped from the benchmark).');
+        }
 
-    const [{ remaining }] = await AppDataSource.query(
-        `SELECT COUNT(*) AS remaining FROM slots WHERE appointment_date = '${BENCH_MARKER_DATE}'`,
-    );
-    console.log(`Teardown complete — bench rows remaining: ${remaining} (should be 0)`);
+        await AppDataSource.query(
+            `DELETE FROM bookings WHERE slot_id IN (SELECT id FROM slots WHERE appointment_date = @0)`,
+            [BENCH_MARKER_DATE],
+        );
+        await AppDataSource.query(
+            `DELETE FROM slots WHERE appointment_date = @0`,
+            [BENCH_MARKER_DATE],
+        );
+        await AppDataSource.query(
+            `DELETE FROM customers WHERE email LIKE '%@' + @0`,
+            [BENCH_EMAIL_DOMAIN],
+        );
 
-    await AppDataSource.destroy();
+        const [{ remaining }] = await AppDataSource.query(
+            `SELECT COUNT(*) AS remaining FROM slots WHERE appointment_date = @0`,
+            [BENCH_MARKER_DATE],
+        );
+        console.log(`Teardown complete — bench rows remaining: ${remaining} (should be 0)`);
+    } finally {
+        await AppDataSource.destroy();
+    }
 }
 
 teardownBench().catch((err) => {

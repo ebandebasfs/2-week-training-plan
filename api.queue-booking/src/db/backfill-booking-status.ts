@@ -7,31 +7,43 @@ async function backfillBookingStatus() {
 
     let backfilled = 0;
 
-    while (true) {
-        const rows: { id: string }[] = await AppDataSource.query(
-            `SELECT TOP (@0) id FROM bookings WHERE booking_status IS NULL`,
-            [BATCH_SIZE],
-        );
+    try {
+        while (true) {
+            const batchCount: number = await AppDataSource.transaction(async (manager) => {
+                // UPDLOCK + READPAST: locks the rows this transaction selects and skips
+                // any rows already locked by a concurrent run, so two backfills executing
+                // at once can't both grab the same batch and double-process it.
+                const rows: { id: string }[] = await manager.query(
+                    `SELECT TOP (@0) id FROM bookings WITH (UPDLOCK, READPAST) WHERE booking_status IS NULL`,
+                    [BATCH_SIZE],
+                );
 
-        if (rows.length === 0) break;
+                if (rows.length === 0) return 0;
 
-        const ids = rows.map((r) => r.id);
-        const placeholders = ids.map((_, i) => `@${i}`).join(', ');
+                const ids = rows.map((r) => r.id);
+                const placeholders = ids.map((_, i) => `@${i}`).join(', ');
 
-        await AppDataSource.query(
-            `UPDATE bookings SET booking_status = 'confirmed' WHERE id IN (${placeholders})`,
-            ids,
-        );
+                await manager.query(
+                    `UPDATE bookings SET booking_status = 'confirmed' WHERE id IN (${placeholders})`,
+                    ids,
+                );
 
-        backfilled += rows.length;
-        console.log(`Backfilled ${backfilled} rows...`);
+                return rows.length;
+            });
 
-        // Small delay between batches so a large table doesn't get hammered back-to-back.
-        await new Promise((resolve) => setTimeout(resolve, 100));
+            if (batchCount === 0) break;
+
+            backfilled += batchCount;
+            console.log(`Backfilled ${backfilled} rows...`);
+
+            // Small delay between batches so a large table doesn't get hammered back-to-back.
+            await new Promise((resolve) => setTimeout(resolve, 100));
+        }
+
+        console.log(`Backfill complete: ${backfilled} rows set to booking_status = 'confirmed'`);
+    } finally {
+        await AppDataSource.destroy();
     }
-
-    console.log(`Backfill complete: ${backfilled} rows set to booking_status = 'confirmed'`);
-    await AppDataSource.destroy();
 }
 
 backfillBookingStatus().catch((err) => {

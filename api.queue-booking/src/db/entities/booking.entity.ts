@@ -12,7 +12,7 @@ export enum BookingStatus {
 @Entity('bookings')
 @Check(`[status] IN ('pending', 'confirmed', 'cancelled')`)
 export class Booking extends BaseEntitySchema {
-    @Index()
+    @Index('idx_bookings_customer_id')
     @ManyToOne(() => Customer, (customer) => customer.bookings, {nullable: false})
     @JoinColumn({ name: 'customer_id' })
     customer!: Customer;
@@ -27,7 +27,12 @@ export class Booking extends BaseEntitySchema {
     @Column({ type: 'nvarchar', nullable: true })
     notes!: string | null;
 
-    // Added for Week 2 Day 1 — drill column, distinct from `status` above (see runbook note)
+    // Added for Week 2 Day 1 — drill column, distinct from `status` above (see runbook note).
+    // `nullable: false` reflects the post-Step-3 (migrated) state only — Step 1 adds this
+    // column nullable and Step 2 backfills it before Step 3's NOT NULL migration runs. With
+    // `synchronize: false` (production config) this entity is metadata only and never drives
+    // schema changes, so the mismatch during Steps 1-2 is safe; it would only matter if
+    // someone ran with `synchronize: true` in dev.
     @Column({ name: 'booking_status', type: 'nvarchar', length: 50, nullable: false })
     bookingStatus!: string
 }
