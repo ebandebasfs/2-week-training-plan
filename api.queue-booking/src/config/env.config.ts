@@ -7,4 +7,7 @@ export const envConfig = () => ({
     db: {
         url: env.DATABASE_URL
     },
+    cors: {
+        origin: env.CORS_ORIGIN
+    },
 })
