@@ -3,53 +3,77 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { QueryFailedError } from 'typeorm';
+import { UnitOfWork } from '../../common/unit-of-work';
 import { Booking, BookingStatus } from '../../db/entities/booking.entity';
 import { Slot } from '../../db/entities/slot.entity';
 import { Customer } from '../../db/entities/customer.entity';
 import { CreateBookingDto } from './dto/create-booking.dto';
 
+// SQL Server error numbers for a violated unique constraint/index. 2627 is a
+// named UNIQUE/PK constraint; 2601 is a duplicate key on a unique index —
+// which is exactly what bookings.slot_id has (REL_409d5b76fb2b0501a8c72dd4ee,
+// the index TypeORM generated for the Slot<->Booking OneToOne join column).
+const SQL_UNIQUE_VIOLATION_NUMBERS = new Set([2627, 2601]);
+
+function isUniqueViolation(err: unknown): boolean {
+  return (
+    err instanceof QueryFailedError &&
+    SQL_UNIQUE_VIOLATION_NUMBERS.has(
+      (err as unknown as { number?: number }).number ?? 0,
+    )
+  );
+}
+
 @Injectable()
 export class BookingsService {
-  constructor(
-    @InjectRepository(Booking)
-    private readonly bookingRepo: Repository<Booking>,
-    @InjectRepository(Slot) private readonly slotRepo: Repository<Slot>,
-    @InjectRepository(Customer)
-    private readonly customerRepo: Repository<Customer>,
-  ) {}
+  constructor(private readonly unitOfWork: UnitOfWork) {}
 
-  // Day 8 scope only: naive read-check-write, no transaction/lock — two
-  // concurrent requests can both pass the isAvailable check. Day 9 closes
-  // this with UPDLOCK/HOLDLOCK + a unique constraint.
   async create(dto: CreateBookingDto): Promise<Booking> {
-    const slot = await this.slotRepo.findOneBy({ id: dto.slotId });
-    if (!slot) {
-      throw new NotFoundException(`Slot ${dto.slotId} not found`);
-    }
-    if (!slot.isAvailable) {
-      throw new ConflictException(`Slot ${dto.slotId} is already booked`);
-    }
+    return this.unitOfWork.run(async (manager) => {
+      const slot = await manager.findOne(Slot, {
+        where: { id: dto.slotId },
+        lock: { mode: 'pessimistic_write' },
+      });
 
-    const customer = await this.customerRepo.findOneBy({ id: dto.customerId });
-    if (!customer) {
-      throw new NotFoundException(`Customer ${dto.customerId} not found`);
-    }
+      if (!slot) {
+        throw new NotFoundException(`Slot ${dto.slotId} not found`);
+      }
 
-    const booking = await this.bookingRepo.save(
-      this.bookingRepo.create({
-        slot,
-        customer,
-        notes: dto.notes ?? null,
-        // bookingStatus: Day 6's drill column, NOT NULL with no DB default. Mirror `status`.
-        bookingStatus: BookingStatus.PENDING,
-      }),
-    );
+      if (!slot.isAvailable) {
+        throw new ConflictException(`Slot ${dto.slotId} is already booked`);
+      }
 
-    slot.isAvailable = false;
-    await this.slotRepo.save(slot);
+      const customer = await manager.findOneBy(Customer, {
+        id: dto.customerId,
+      });
 
-    return booking;
+      if (!customer) {
+        throw new NotFoundException(`Customer ${dto.customerId} not found`);
+      }
+
+      let booking: Booking;
+      try {
+        booking = await manager.save(
+          manager.create(Booking, {
+            slot,
+            customer,
+            notes: dto.notes ?? null,
+            // bookingStatus: Day 6's drill column, NOT NULL with no DB default. Mirror `status`.
+            bookingStatus: BookingStatus.PENDING,
+          }),
+        );
+      } catch (err) {
+        if (isUniqueViolation(err)) {
+          throw new ConflictException(`Slot ${dto.slotId} is already booked`);
+        }
+        throw err;
+      }
+
+      slot.isAvailable = false;
+      await manager.save(slot);
+
+      return booking;
+    });
   }
 }

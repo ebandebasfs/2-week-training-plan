@@ -2,6 +2,7 @@ import { ConfigModule, ConfigService } from "@nestjs/config"
 import { TypeOrmModule } from "@nestjs/typeorm"
 import { envConfig } from "src/config/env.config"
 import { SlotsModule } from "./slots/slots.module"
+import { CustomersModule } from "./customers/customers.module"
 import { BookingsModule } from "./bookings/bookings.module"
 
 export const InfraModules = [
@@ -26,5 +27,6 @@ export const InfraModules = [
 
 export const AppModules = [
     SlotsModule,
+    CustomersModule,
     BookingsModule,
 ]
