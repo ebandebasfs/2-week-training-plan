@@ -2,12 +2,22 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ApiError } from "@/lib/api/client";
+import type { Slot } from "@/lib/api/slots";
 import { useSlots } from "@/hooks/use-slots";
 import { useCreateBooking } from "@/hooks/use-create-booking";
 import SlotSummary from "./slot-summary";
 
 // No auth/customer-selection UI yet — pinned to one seeded customer. See .env.sample.
 const DEMO_CUSTOMER_ID = process.env.NEXT_PUBLIC_DEMO_CUSTOMER_ID ?? "";
+if (!DEMO_CUSTOMER_ID) {
+  throw new Error(
+    "NEXT_PUBLIC_DEMO_CUSTOMER_ID is not set. Check app.queue-booking/.env.sample.",
+  );
+}
+
+// Stable reference so `slots={slots}` doesn't break SlotSummary's React.memo
+// while slotsQuery is loading (a fresh `[]` literal would be a new array every render).
+const EMPTY_SLOTS: Slot[] = [];
 
 export default function BookingForm() {
   const [slotId, setSlotId] = useState("");
@@ -33,7 +43,7 @@ export default function BookingForm() {
     );
   };
 
-  const slots = slotsQuery.data ?? [];
+  const slots = slotsQuery.data ?? EMPTY_SLOTS;
 
   return (
     <div className="w-full max-w-md rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
