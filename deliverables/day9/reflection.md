@@ -53,13 +53,13 @@ knowing the term:
   be enough. It isn't. Under SQL Server's default isolation, a plain
   `SELECT` inside a transaction still lets another transaction read the
   same row. You have to actually claim the row with a lock
-  (`setLock('pessimistic_write')`). The transaction and the lock are two
-  different things, and I was conflating them.
+  (`lock: { mode: 'pessimistic_write' }`). The transaction and the lock are
+  two different things, and I was conflating them.
 - **The ORM's lock API was enough. I didn't need raw SQL.** I expected I'd
   have to write raw `WITH (UPDLOCK, HOLDLOCK)` SQL, which I've been
-  avoiding. TypeORM's `.setLock('pessimistic_write')` does the same job
-  here. Not knowing what the ORM generates underneath was the actual gap,
-  not using an ORM.
+  avoiding. TypeORM's `findOne(..., { lock: { mode: 'pessimistic_write' } })`
+  does the same job here. Not knowing what the ORM generates underneath was
+  the actual gap, not using an ORM.
 - **A passing test isn't proof unless it could have failed.** Two
   sequential `await`s would prove nothing since there'd be no real race.
   `Promise.all` fires both at once, which is what makes 201/409 mean
