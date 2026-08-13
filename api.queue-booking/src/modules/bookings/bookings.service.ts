@@ -28,6 +28,7 @@ export class BookingsService {
 
   async create(dto: CreateBookingDto): Promise<Booking> {
     return this.unitOfWork.run(async (manager) => {
+      // Exceptions thrown here auto-rollback the transaction (TypeORM behavior).
       const slot = await manager.findOne(Slot, {
         where: { id: dto.slotId },
         lock: { mode: 'pessimistic_write' },
