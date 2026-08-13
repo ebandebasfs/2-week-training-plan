@@ -8,6 +8,7 @@ const envSchema = z.object({
         .pipe(z.number().int().positive())
         .default(3000),
     DATABASE_URL: z.string().min(1),
+    CORS_ORIGIN: z.string().min(1).default('http://localhost:3000'),
 })
 
 // Run validation and get the validated object

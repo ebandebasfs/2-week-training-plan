@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, useEffect, useRef } from "react";
-import type { Slot } from "@/data/mock-slots";
+import type { Slot } from "@/lib/api/slots";
 
 interface SlotSummaryProps {
   slotId: string;
