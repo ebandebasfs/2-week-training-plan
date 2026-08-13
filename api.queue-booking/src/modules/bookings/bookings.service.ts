@@ -17,12 +17,9 @@ import { CreateBookingDto } from './dto/create-booking.dto';
 const SQL_UNIQUE_VIOLATION_NUMBERS = new Set([2627, 2601]);
 
 function isUniqueViolation(err: unknown): boolean {
-  return (
-    err instanceof QueryFailedError &&
-    SQL_UNIQUE_VIOLATION_NUMBERS.has(
-      (err as unknown as { number?: number }).number ?? 0,
-    )
-  );
+  if (!(err instanceof QueryFailedError)) return false;
+  const { number } = err.driverError as { number?: number };
+  return SQL_UNIQUE_VIOLATION_NUMBERS.has(number ?? 0);
 }
 
 @Injectable()
