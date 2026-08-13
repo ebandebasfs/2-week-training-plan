@@ -25,7 +25,8 @@
     "seed": "ts-node src/db/seed.ts",
     "backfill:booking-status": "ts-node src/db/backfill-booking-status.ts",
     "bench:index-seed": "ts-node src/db/bench-index-seed.ts",
-    "bench:index-teardown": "ts-node src/db/bench-index-teardown.ts"
+    "bench:index-teardown": "ts-node src/db/bench-index-teardown.ts",
+    "proof:concurrency": "ts-node src/db/day9-concurrency-proof.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",

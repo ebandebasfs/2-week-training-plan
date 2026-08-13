@@ -49,9 +49,16 @@ async function seed() {
                 customer: faker.helpers.arrayElement(customers),
                 slot,
                 status: faker.helpers.arrayElement(Object.values(BookingStatus)),
+                // NOT NULL, no DB default (see booking.entity.ts) — mirror `status`.
+                bookingStatus: BookingStatus.PENDING,
                 notes: faker.helpers.maybe(() => faker.lorem.sentence(), { probability: 0.3 }) ?? null,
             }),
         ),
+    );
+
+    // A booked slot is no longer available (previously missing here).
+    await slotRepo.save(
+        shuffledSlots.map((slot) => slotRepo.create({ ...slot, isAvailable: false })),
     );
 
     console.log(`Seed complete: ${customers.length} customers, ${slots.length} slots, ${shuffledSlots.length} bookings`);
