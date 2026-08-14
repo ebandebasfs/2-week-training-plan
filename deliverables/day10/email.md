@@ -7,7 +7,7 @@ day: Day 10 (Fri W2)
 track: Comms
 deliverable_expected: Live walkthrough delivered · final README
 deliverable_type: Document
-deliverable_link: <URL to PR>
+deliverable_link: https://github.com/ebandebasfs/2-week-training-plan/pull/10
 extra_links: README.md
 status: Done
 ---END-METADATA---
